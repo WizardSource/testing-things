@@ -1,6 +1,6 @@
-# Email Service
-
-A full-stack application for managing email templates and sending emails with a modern, responsive UI.
+# Email 
+<img width="1440" alt="Screenshot 2024-10-28 at 7 21 51 PM" src="https://github.com/user-attachments/assets/a8795bf2-2dde-4708-9623-16c1990077ca">
+<img width="1440" alt="Screenshot 2024-10-28 at 7 22 00 PM" src="https://github.com/user-attachments/assets/af44c2ce-f742-4aa2-958a-9a79533918f6">
 
 Prerequisites
 ------------
@@ -173,4 +173,6 @@ If you encounter any issues:
    - "debug is not defined": Restart the backend server
 
 For more help, please create an issue on the repository.
+
+
 
