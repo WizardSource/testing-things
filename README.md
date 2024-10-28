@@ -1,6 +1,5 @@
 # Email 
 <img width="1440" alt="Screenshot 2024-10-28 at 7 21 51 PM" src="https://github.com/user-attachments/assets/a8795bf2-2dde-4708-9623-16c1990077ca">
-<img width="1440" alt="Screenshot 2024-10-28 at 7 22 00 PM" src="https://github.com/user-attachments/assets/af44c2ce-f742-4aa2-958a-9a79533918f6">
 <img width="1440" alt="Screenshot 2024-10-28 at 7 36 34 PM" src="https://github.com/user-attachments/assets/be134916-c36e-46d0-8b71-2fcf542c8833">
 <img width="1440" alt="Screenshot 2024-10-28 at 7 38 42 PM" src="https://github.com/user-attachments/assets/37d1ba19-1364-4980-a273-1e7e9cd4cb39">
 <img width="1440" alt="Screenshot 2024-10-28 at 7 38 54 PM" src="https://github.com/user-attachments/assets/4b02606a-da62-4019-84cb-1198b3a4443d">
