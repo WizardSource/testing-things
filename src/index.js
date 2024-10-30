@@ -1,10 +1,12 @@
-require('dotenv').config();
-const express = require('express');
-const { Pool } = require('pg');
-const cors = require('cors');
-const { ServerClient } = require('postmark');
+require("dotenv").config();
+const express = require("express");
+const { Pool } = require("pg");
+const cors = require("cors");
+const { ServerClient } = require("postmark");
+// Import seed function
+const seedDatabase = require("./db/seeds/seed");
 
-console.log('Starting server...');
+console.log("Starting server...");
 
 const app = express();
 
@@ -20,70 +22,70 @@ app.use((req, res, next) => {
 
 // Database connection
 const pool = new Pool({
-  user: process.env.DB_USER || 'wave',
-  host: process.env.DB_HOST || 'localhost',
-  database: process.env.DB_NAME || 'email_service',
-  password: process.env.DB_PASSWORD || '',
-  port: process.env.DB_PORT || 5432
+  user: process.env.DB_USER || "wave",
+  host: process.env.DB_HOST || "localhost",
+  database: process.env.DB_NAME || "email_service",
+  password: process.env.DB_PASSWORD || "",
+  port: process.env.DB_PORT || 5432,
 });
 
 // Initialize Postmark client
 const postmarkClient = new ServerClient(process.env.POSTMARK_API_KEY);
 
 // Template endpoints
-app.get('/templates', async (req, res) => {
+app.get("/templates", async (req, res) => {
   try {
-    console.log('Fetching templates from database...');
+    console.log("Fetching templates from database...");
     const result = await pool.query(
-      'SELECT * FROM templates ORDER BY created_at DESC'
+      "SELECT * FROM templates ORDER BY created_at DESC"
     );
-    console.log('Templates found:', result.rows);
+    console.log("Templates found:", result.rows);
     res.json(result.rows);
   } catch (err) {
-    console.error('Database error:', err);
+    console.error("Database error:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-app.post('/templates', async (req, res) => {
+app.post("/templates", async (req, res) => {
   try {
     const { name, subject, html_content } = req.body;
-    console.log('Creating template:', { name, subject, html_content });
-    
+    console.log("Creating template:", { name, subject, html_content });
+
     const result = await pool.query(
-      'INSERT INTO templates (name, subject, html_content) VALUES ($1, $2, $3) RETURNING *',
+      "INSERT INTO templates (name, subject, html_content) VALUES ($1, $2, $3) RETURNING *",
       [name, subject, html_content]
     );
-    
-    console.log('Template created:', result.rows[0]);
+
+    console.log("Template created:", result.rows[0]);
     res.json(result.rows[0]);
   } catch (err) {
-    console.error('Database error:', err);
+    console.error("Database error:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
 // Send email endpoint
-app.post('/send-email', async (req, res) => {
+app.post("/send-email", async (req, res) => {
   const client = await pool.connect();
   try {
     const { template_id, to_email } = req.body;
-    console.log('Received request to send email:', { template_id, to_email });
+    console.log("Received request to send email:", { template_id, to_email });
 
     // Check if Postmark API key exists
     if (!process.env.POSTMARK_API_KEY) {
-      throw new Error('POSTMARK_API_KEY is not configured');
+      throw new Error("POSTMARK_API_KEY is not configured");
     }
 
     // Check if FROM_EMAIL exists
     if (!process.env.FROM_EMAIL) {
-      throw new Error('FROM_EMAIL is not configured');
+      throw new Error("FROM_EMAIL is not configured");
     }
 
     // Get template
-    console.log('Fetching template...');
+    console.log("Fetching template...");
     const templateResult = await client.query(
-      'SELECT * FROM templates WHERE id = $1',
+      "SELECT * FROM templates WHERE id = $1",
       [template_id]
     );
 
@@ -92,57 +94,56 @@ app.post('/send-email', async (req, res) => {
     }
 
     const template = templateResult.rows[0];
-    console.log('Found template:', template);
+    console.log("Found template:", template);
 
     // Send email via Postmark
-    console.log('Attempting to send email via Postmark...');
+    console.log("Attempting to send email via Postmark...");
     try {
       const emailResult = await postmarkClient.sendEmail({
         From: process.env.FROM_EMAIL,
         To: to_email,
         Subject: template.subject,
         HtmlBody: template.html_content,
-        MessageStream: 'outbound',
+        MessageStream: "outbound",
         TrackOpens: true,
-        TrackLinks: 'HtmlAndText'
+        TrackLinks: "HtmlAndText",
       });
-      console.log('Postmark response:', emailResult);
+      console.log("Postmark response:", emailResult);
     } catch (postmarkError) {
-      console.error('Postmark error:', postmarkError);
+      console.error("Postmark error:", postmarkError);
       throw new Error(`Postmark error: ${postmarkError.message}`);
     }
 
     // Record the sent email
-    console.log('Recording sent email in database...');
+    console.log("Recording sent email in database...");
     const sentEmailResult = await client.query(
       `INSERT INTO sent_emails 
        (template_id, recipient, status) 
        VALUES ($1, $2, $3) 
        RETURNING *`,
-      [template_id, to_email, 'sent']
+      [template_id, to_email, "sent"]
     );
 
-    await client.query('COMMIT');
-    console.log('Email sent and recorded successfully');
+    await client.query("COMMIT");
+    console.log("Email sent and recorded successfully");
 
     res.json({
       success: true,
-      message: 'Email sent successfully',
-      emailId: sentEmailResult.rows[0].id
+      message: "Email sent successfully",
+      emailId: sentEmailResult.rows[0].id,
     });
-
   } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('Detailed error:', {
+    await client.query("ROLLBACK");
+    console.error("Detailed error:", {
       message: err.message,
       stack: err.stack,
-      details: err.details || 'No additional details'
+      details: err.details || "No additional details",
     });
-    
+
     res.status(500).json({
-      error: 'Failed to send email',
+      error: "Failed to send email",
       details: err.message,
-      type: err.constructor.name
+      type: err.constructor.name,
     });
   } finally {
     client.release();
@@ -150,7 +151,7 @@ app.post('/send-email', async (req, res) => {
 });
 
 // Analytics endpoints
-app.get('/analytics/opens', async (req, res) => {
+app.get("/analytics/opens", async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
@@ -165,12 +166,12 @@ app.get('/analytics/opens', async (req, res) => {
     `);
     res.json(result.rows);
   } catch (err) {
-    console.error('Error fetching opens:', err);
+    console.error("Error fetching opens:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-app.get('/analytics/clicks', async (req, res) => {
+app.get("/analytics/clicks", async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
@@ -185,30 +186,30 @@ app.get('/analytics/clicks', async (req, res) => {
     `);
     res.json(result.rows);
   } catch (err) {
-    console.error('Error fetching clicks:', err);
+    console.error("Error fetching clicks:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
 // Add these endpoints
-app.put('/templates/:id', async (req, res) => {
+app.put("/templates/:id", async (req, res) => {
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-    
+    await client.query("BEGIN");
+
     const { id } = req.params;
     const { name, subject, html_content } = req.body;
-    
+
     // First check if template exists
     const templateCheck = await client.query(
-      'SELECT id FROM templates WHERE id = $1',
+      "SELECT id FROM templates WHERE id = $1",
       [id]
     );
-    
+
     if (templateCheck.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ 
-        error: 'Template not found' 
+      await client.query("ROLLBACK");
+      return res.status(404).json({
+        error: "Template not found",
       });
     }
 
@@ -224,67 +225,64 @@ app.put('/templates/:id', async (req, res) => {
       [name, subject, html_content, id]
     );
 
-    await client.query('COMMIT');
+    await client.query("COMMIT");
 
     console.log(`Template ${id} updated successfully`);
     res.json(result.rows[0]);
-
   } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('Error updating template:', err);
-    res.status(500).json({ 
-      error: 'Failed to update template',
-      details: err.message 
+    await client.query("ROLLBACK");
+    console.error("Error updating template:", err);
+    res.status(500).json({
+      error: "Failed to update template",
+      details: err.message,
     });
   } finally {
     client.release();
   }
 });
 
-app.delete('/templates/:id', async (req, res) => {
+app.delete("/templates/:id", async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
-    await client.query('BEGIN');
-    
+    await client.query("BEGIN");
+
     // First check if template exists
     const templateCheck = await client.query(
-      'SELECT id FROM templates WHERE id = $1',
+      "SELECT id FROM templates WHERE id = $1",
       [req.params.id]
     );
-    
+
     if (templateCheck.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ 
-        error: 'Template not found' 
+      await client.query("ROLLBACK");
+      return res.status(404).json({
+        error: "Template not found",
       });
     }
 
     // Delete related sent_emails first (due to foreign key constraint)
-    await client.query(
-      'DELETE FROM sent_emails WHERE template_id = $1',
-      [req.params.id]
-    );
+    await client.query("DELETE FROM sent_emails WHERE template_id = $1", [
+      req.params.id,
+    ]);
 
     // Then delete the template
     const result = await client.query(
-      'DELETE FROM templates WHERE id = $1 RETURNING *',
+      "DELETE FROM templates WHERE id = $1 RETURNING *",
       [req.params.id]
     );
 
-    await client.query('COMMIT');
+    await client.query("COMMIT");
 
-    res.json({ 
-      message: 'Template deleted successfully',
-      deletedTemplate: result.rows[0]
+    res.json({
+      message: "Template deleted successfully",
+      deletedTemplate: result.rows[0],
     });
-
   } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('Error in delete template:', err);
-    res.status(500).json({ 
-      error: 'Failed to delete template',
-      details: err.message 
+    await client.query("ROLLBACK");
+    console.error("Error in delete template:", err);
+    res.status(500).json({
+      error: "Failed to delete template",
+      details: err.message,
     });
   } finally {
     client.release();
@@ -292,11 +290,11 @@ app.delete('/templates/:id', async (req, res) => {
 });
 
 // Add this new endpoint
-app.get('/sent-emails', async (req, res) => {
-  console.log('GET /sent-emails - Starting request');
+app.get("/sent-emails", async (req, res) => {
+  console.log("GET /sent-emails - Starting request");
   const client = await pool.connect();
   try {
-    console.log('Executing query...');
+    console.log("Executing query...");
     const result = await client.query(`
       SELECT 
         se.id,
@@ -311,14 +309,14 @@ app.get('/sent-emails', async (req, res) => {
       LEFT JOIN templates t ON t.id = se.template_id
       ORDER BY se.sent_at DESC
     `);
-    
+
     console.log(`Found ${result.rows.length} emails`);
     res.json(result.rows);
   } catch (err) {
-    console.error('Error in /sent-emails:', err);
-    res.status(500).json({ 
-      error: 'Failed to fetch sent emails',
-      details: DEBUG ? err.message : undefined
+    console.error("Error in /sent-emails:", err);
+    res.status(500).json({
+      error: "Failed to fetch sent emails",
+      details: DEBUG ? err.message : undefined,
     });
   } finally {
     client.release();
@@ -326,12 +324,12 @@ app.get('/sent-emails', async (req, res) => {
 });
 
 // Add these endpoints for Postmark webhooks
-app.post('/webhooks/open', async (req, res) => {
+app.post("/webhooks/open", async (req, res) => {
   const client = await pool.connect();
   try {
     const { MessageID, Recipient, ReceivedAt, UserAgent, IP } = req.body;
-    
-    console.log('Email opened:', { MessageID, Recipient });
+
+    console.log("Email opened:", { MessageID, Recipient });
 
     // Record the open event
     await client.query(
@@ -348,19 +346,20 @@ app.post('/webhooks/open', async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    console.error('Error recording email open:', err);
+    console.error("Error recording email open:", err);
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
   }
 });
 
-app.post('/webhooks/click', async (req, res) => {
+app.post("/webhooks/click", async (req, res) => {
   const client = await pool.connect();
   try {
-    const { MessageID, Recipient, ReceivedAt, UserAgent, IP, OriginalLink } = req.body;
-    
-    console.log('Email link clicked:', { MessageID, Recipient, OriginalLink });
+    const { MessageID, Recipient, ReceivedAt, UserAgent, IP, OriginalLink } =
+      req.body;
+
+    console.log("Email link clicked:", { MessageID, Recipient, OriginalLink });
 
     // Record the click event
     await client.query(
@@ -378,7 +377,7 @@ app.post('/webhooks/click', async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    console.error('Error recording email click:', err);
+    console.error("Error recording email click:", err);
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
@@ -386,8 +385,8 @@ app.post('/webhooks/click', async (req, res) => {
 });
 
 // Add these new routes for the dashboard
-app.get('/stats', async (req, res) => {
-  console.log(new Date().toISOString(), '- GET /stats');
+app.get("/stats", async (req, res) => {
+  console.log(new Date().toISOString(), "- GET /stats");
   const client = await pool.connect();
   try {
     const stats = await client.query(`
@@ -428,17 +427,17 @@ app.get('/stats', async (req, res) => {
       openRate: parseFloat(stats.rows[0].open_rate),
       clickRate: parseFloat(stats.rows[0].click_rate),
       templates: parseInt(stats.rows[0].templates),
-      recentEmails: recentEmails.rows
+      recentEmails: recentEmails.rows,
     });
   } catch (err) {
-    console.error('Error fetching stats:', err);
-    res.status(500).json({ error: 'Failed to fetch stats' });
+    console.error("Error fetching stats:", err);
+    res.status(500).json({ error: "Failed to fetch stats" });
   } finally {
     client.release();
   }
 });
 
-app.get('/activities', async (req, res) => {
+app.get("/activities", async (req, res) => {
   const client = await pool.connect();
   try {
     const result = await client.query(`
@@ -452,108 +451,85 @@ app.get('/activities', async (req, res) => {
     `);
     res.json(result.rows);
   } catch (err) {
-    console.error('Error fetching activities:', err);
-    res.status(500).json({ error: 'Failed to fetch activities' });
+    console.error("Error fetching activities:", err);
+    res.status(500).json({ error: "Failed to fetch activities" });
   } finally {
     client.release();
   }
 });
 
-// Make sure you have these tables in your database
-const createTables = async () => {
-  const client = await pool.connect();
+// Initialize database with seed data if needed
+const initializeDatabase = async () => {
   try {
-    await client.query(`
-      -- Drop existing tables if they exist
-      DROP TABLE IF EXISTS email_clicks CASCADE;
-      DROP TABLE IF EXISTS email_opens CASCADE;
-      DROP TABLE IF EXISTS sent_emails CASCADE;
-      DROP TABLE IF EXISTS templates CASCADE;
-
-      -- Create templates table
-      CREATE TABLE templates (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        subject VARCHAR(255) NOT NULL,
-        html_content TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      -- Create sent_emails table
-      CREATE TABLE sent_emails (
-        id SERIAL PRIMARY KEY,
-        template_id INTEGER REFERENCES templates(id),
-        recipient VARCHAR(255) NOT NULL,
-        sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        status VARCHAR(50) DEFAULT 'sent',
-        opens INTEGER DEFAULT 0,
-        clicks INTEGER DEFAULT 0,
-        last_activity_at TIMESTAMP
-      );
-
-      -- Create email_opens table
-      CREATE TABLE email_opens (
-        id SERIAL PRIMARY KEY,
-        email_id INTEGER REFERENCES sent_emails(id),
-        opened_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        user_agent TEXT,
-        ip_address VARCHAR(45)
-      );
-
-      -- Create email_clicks table
-      CREATE TABLE email_clicks (
-        id SERIAL PRIMARY KEY,
-        email_id INTEGER REFERENCES sent_emails(id),
-        clicked_url TEXT,
-        clicked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        user_agent TEXT,
-        ip_address VARCHAR(45)
-      );
+    // Check if database is empty
+    const result = await pool.query(`
+      SELECT COUNT(*) FROM templates
     `);
-    console.log('Tables created successfully');
 
-    // Insert test data
-    await client.query(`
-      -- Insert test templates
-      INSERT INTO templates (name, subject, html_content)
-      VALUES 
-        ('Welcome Email', 'Welcome!', '<h1>Welcome to our service!</h1>'),
-        ('Newsletter', 'Monthly Update', '<h1>Monthly Newsletter</h1>')
-      ON CONFLICT DO NOTHING;
-
-      -- Insert test sent emails
-      INSERT INTO sent_emails (template_id, recipient, sent_at, status, opens, clicks)
-      VALUES 
-        (1, 'test1@example.com', NOW() - INTERVAL '1 day', 'sent', 2, 1),
-        (2, 'test2@example.com', NOW() - INTERVAL '2 days', 'sent', 1, 0)
-      ON CONFLICT DO NOTHING;
-    `);
+    if (parseInt(result.rows[0].count) === 0) {
+      console.log("Database is empty, running seed...");
+      await seedDatabase(false); // Pass false to prevent pool ending
+    } else {
+      console.log("Database already contains data, skipping seed");
+    }
   } catch (err) {
-    console.error('Error creating tables:', err);
-  } finally {
-    client.release();
+    if (err.code === "42P01") {
+      // Table doesn't exist
+      console.log("Tables do not exist, running migrations...");
+      // Run migrations first
+      const fs = require("fs");
+      const path = require("path");
+      const migration = fs.readFileSync(
+        path.join(__dirname, "db/migrations/initial_schema.sql"),
+        "utf8"
+      );
+      await pool.query(migration);
+      console.log("Running seed...");
+      await seedDatabase(false); // Pass false to prevent pool ending
+    } else {
+      console.error("Error checking database:", err);
+      throw err;
+    }
   }
 };
 
-createTables();
+// Start server only after database is ready
+const startServer = async () => {
+  try {
+    await initializeDatabase();
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (err) {
+    console.error("Failed to start server:", err);
+    await pool.end(); // End pool on error
+    process.exit(1);
+  }
+};
+
+startServer();
+
+// Handle shutdown gracefully
+process.on("SIGINT", async () => {
+  console.log("\nShutting down gracefully...");
+  await pool.end();
+  process.exit(0);
 });
 
 // Add this test route
-app.get('/test-db', async (req, res) => {
-  console.log('Testing database connection...');
+app.get("/test-db", async (req, res) => {
+  console.log("Testing database connection...");
   const client = await pool.connect();
   try {
-    const result = await client.query('SELECT NOW()');
-    res.json({ 
-      success: true, 
-      timestamp: result.rows[0].now 
+    const result = await client.query("SELECT NOW()");
+    res.json({
+      success: true,
+      timestamp: result.rows[0].now,
     });
   } catch (err) {
-    console.error('Database test error:', err);
+    console.error("Database test error:", err);
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
@@ -561,10 +537,10 @@ app.get('/test-db', async (req, res) => {
 });
 
 // Error handling
-process.on('unhandledRejection', (err) => {
-  console.error('Unhandled rejection:', err);
+process.on("unhandledRejection", (err) => {
+  console.error("Unhandled rejection:", err);
 });
 
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught exception:', err);
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception:", err);
 });
